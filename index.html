@@ -111,7 +111,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":99547984,"index.wasm":43682606},"focusCanvas":true,"gdextensionLibs":[]};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":124553968,"index.wasm":43682606},"focusCanvas":true,"gdextensionLibs":[]};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -199,6 +199,22 @@ const engine = new Engine(GODOT_CONFIG);
 		}
 	} else {
 		setStatusMode('progress');
+
+        // Reassemble the unchanged Godot pack from files below GitHub's size limit.
+        const originalPreloadFile = engine.preloadFile.bind(engine);
+        engine.preloadFile = function (file, path) {
+            if (file !== 'index.pck') return originalPreloadFile(file, path);
+            return Promise.all(["index.pck.part0", "index.pck.part1"].map(async function (part) {
+                const response = await fetch(part);
+                if (!response.ok) throw new Error('Could not load ' + part);
+                return new Uint8Array(await response.arrayBuffer());
+            })).then(function (parts) {
+                const bytes = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+                let offset = 0;
+                parts.forEach(function (part) { bytes.set(part, offset); offset += part.length; });
+                return originalPreloadFile(bytes.buffer, path);
+            });
+        };
 		engine.startGame({
 			'onProgress': function (current, total) {
 				if (current > 0 && total > 0) {
